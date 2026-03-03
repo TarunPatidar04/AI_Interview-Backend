@@ -48,7 +48,7 @@ Return strictly JSON:
       },
     ];
 
-    const aiResponse = await askAi(messages);
+    const aiResponse = await askAi({ messages });
     const parsedResponse = JSON.parse(aiResponse);
     console.log("parsedResponse", parsedResponse);
 
