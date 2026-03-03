@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import authRoutes from "./routes/auth.routes.js";
 import cookieParser from "cookie-parser";
 import userRoutes from "./routes/user.routes.js";
+import interviewRoutes from "./routes/interview.route.js";
 
 dotenv.config();
 
@@ -22,6 +23,7 @@ app.use(cookieParser());
 
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
+app.use("/api/interview", interviewRoutes);
 
 app.get("/", (req, res) => {
     res.send("AI Interview Backend is running");
