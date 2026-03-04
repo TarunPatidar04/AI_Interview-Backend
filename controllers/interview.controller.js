@@ -40,7 +40,9 @@ Return strictly JSON:
   "role": "string",
   "experience": "string",
   "projects": ["project1", "project2"],
-  "skills": ["skill1", "skill2"]
+  "skills": ["skill1", "skill2"],
+  "atsScore": number,
+  "feedback": "string (bullet points or short paragraph on how to improve the resume)"
 }
 `,
       },
@@ -61,6 +63,8 @@ Return strictly JSON:
       experience: parsedResponse.experience,
       projects: parsedResponse.projects,
       skills: parsedResponse.skills,
+      atsScore: parsedResponse.atsScore,
+      feedback: parsedResponse.feedback,
       fullText,
     });
   } catch (error) {
