@@ -394,3 +394,18 @@ export const finishInterview = async (req, res) => {
       .json({ message: `Failed to finish interview ${error}` });
   }
 };
+
+export const getInterviewHistory = async (req, res) => {
+  try {
+    const interviews = await Interview.find({ userId: req.userId })
+      .select("role experience mode status finalScore createdAt overallFeedback totalConfidence totalCommunication totalCorrectness")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json(interviews);
+  } catch (error) {
+    console.log(error);
+    return res
+      .status(500)
+      .json({ message: `Failed to fetch interview history ${error}` });
+  }
+};
