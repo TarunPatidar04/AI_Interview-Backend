@@ -77,7 +77,8 @@ Return strictly JSON:
 
 export const generateQuestions = async (req, res) => {
   try {
-    const { role, experience, mode, resumeText, projects, skills } = req.body;
+    let { role, experience, mode } = req.body;
+    const { resumeText, projects, skills } = req.body;
     role = role?.trim();
     experience = experience?.trim();
     mode = mode?.trim();
@@ -93,7 +94,7 @@ export const generateQuestions = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    if (user.credits < 50) {
+    if (user.credits < 20) {
       return res.status(400).json({ message: "Insufficient credits" });
     }
 
@@ -156,8 +157,8 @@ Make questions based on the candidate’s role, experience,interviewMode, projec
     const aiResponse = await askAi({ messages });
     console.log("aiResponse", aiResponse);
 
-    if (aiResponse || aiResponse.trim()) {
-      return res.status(500).json({ message: "AI returend empty response" });
+    if (!aiResponse || !aiResponse.trim()) {
+      return res.status(500).json({ message: "AI returned empty response" });
     }
 
     const questionArray = aiResponse
@@ -172,7 +173,7 @@ Make questions based on the candidate’s role, experience,interviewMode, projec
         .json({ message: "AI failed to generate questions" });
     }
 
-    user.credits -= 50;
+    user.credits -= 20;
     await user.save();
 
     const interview = await Interview.create({
