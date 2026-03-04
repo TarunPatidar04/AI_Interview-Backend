@@ -14,7 +14,6 @@ export const analyzeResume = async (req, res) => {
     const Filebuffer = await fs.promises.readFile(file);
     const uint8Array = new Uint8Array(Filebuffer);
     const pdf = await pdfjsLib.getDocument({ data: uint8Array }).promise;
-    // console.log(pdf)
 
     let fullText = "";
     for (let i = 1; i <= pdf.numPages; i++) {
@@ -23,10 +22,8 @@ export const analyzeResume = async (req, res) => {
       const text = textContent.items.map((item) => item.str).join(" ");
       fullText += text + "\n";
     }
-    console.log("fullText", fullText);
 
     fullText = fullText.replace(/\s+/g, " ").trim();
-    console.log("clean fullText", fullText);
 
     const messages = [
       {
@@ -54,7 +51,6 @@ Return strictly JSON:
 
     const aiResponse = await askAi({ messages });
     const parsedResponse = JSON.parse(aiResponse);
-    console.log("parsedResponse", parsedResponse);
 
     fs.unlinkSync(file);
     return res.status(200).json({
@@ -159,7 +155,6 @@ Make questions based on the candidate’s role, experience,interviewMode, projec
     ];
 
     const aiResponse = await askAi({ messages });
-    console.log("aiResponse", aiResponse);
 
     if (!aiResponse || !aiResponse.trim()) {
       return res.status(500).json({ message: "AI returned empty response" });
