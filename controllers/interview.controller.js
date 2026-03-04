@@ -69,7 +69,9 @@ Return strictly JSON:
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
-    return res.status(500).json({ message: "Failed to analyze resume" });
+    return res
+      .status(500)
+      .json({ message: `Failed to analyze resume ${error}` });
   }
 };
 
@@ -192,21 +194,203 @@ Make questions based on the candidate’s role, experience,interviewMode, projec
       questions: interview.questions,
       creditLeft: user.credits,
       userName: user.name,
-
     });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ message: "Failed to generate questions" });
+    return res
+      .status(500)
+      .json({ message: `Failed to generate questions ${error}` });
   }
 };
 
-
-
 export const submitAnswer = async (req, res) => {
   try {
+    const { interviewId, questionId, answer, questionIndex, timeTaken } =
+      req.body;
 
+    const interview = await Interview.findById(interviewId);
 
-  } catch (error) {
+    const question = interview.questions[questionIndex];
 
-  }
+    if (!answer) {
+      question.score = 0;
+      question.feedback = "No answer submitted, Answer not evaluated";
+      question.answer = "";
+      await interview.save();
+      return res.json({
+        feedback: question.feedback,
+      });
+    }
+
+    // if Time exceed
+    if (timeTaken > question.timeLimit) {
+      question.score = 0;
+      question.feedback = "Time limit exceeded";
+      question.answer = answer;
+      await interview.save();
+      return res.json({
+        feedback: question.feedback,
+      });
+    }
+
+    const messages = [
+      {
+        role: "system",
+        content: `
+You are a professional human interviewer evaluating a candidate's answer in a real interview.
+
+Evaluate naturally and fairly, like a real person would.
+
+Score the answer in these areas (0 to 10):
+
+1. Confidence – Does the answer sound clear, confident, and well-presented?
+2. Communication – Is the language simple, clear, and easy to understand?
+3. Correctness – Is the answer accurate, relevant, and complete?
+
+Rules:
+- Be realistic and unbiased.
+- Do not give random high scores.
+- If the answer is weak, score low.
+- If the answer is strong and detailed, score high.
+- Consider clarity, structure, and relevance.
+
+Calculate:
+finalScore = average of confidence, communication, and correctness (rounded to nearest whole number).
+
+Feedback Rules:
+- Write natural human feedback.
+- 10 to 15 words only.
+- Sound like real interview feedback.
+- Can suggest improvement if needed.
+- Do NOT repeat the question.
+- Do NOT explain scoring.
+- Keep tone professional and honest.
+
+Return ONLY valid JSON in this format:
+
+{
+  "confidence": number,
+  "communication": number,
+  "correctness": number,
+  "finalScore": number,
+  "feedback": "short human feedback"
 }
+`,
+      },
+      {
+        role: "user",
+        content: `
+Question: ${question.question}
+Answer: ${answer}
+`,
+      },
+    ];
+
+    const aiResponse = await askAi({ messages });
+    const parsedResponse = JSON.parse(aiResponse);
+
+    question.score = parsedResponse.finalScore;
+    question.feedback = parsedResponse.feedback;
+    question.confidence = parsedResponse.confidence;
+    question.communication = parsedResponse.communication;
+    question.correctness = parsedResponse.correctness;
+    question.answer = answer;
+
+    await interview.save();
+
+    return res.json({
+      feedback: question.feedback,
+      score: question.score,
+    });
+  } catch (error) {
+    console.log(error);
+    return res
+      .status(500)
+      .json({ message: `Failed to submit answer ${error}` });
+  }
+};
+
+const generateOverallFeedback = async (interview) => {
+  try {
+    const questionData = interview.questions
+      .map(
+        (q, i) => `
+    Question ${i + 1}: ${q.question}
+    Candidate Answer: ${q.answer || "No answer provided"}
+    Score: ${q.score}/10
+    `,
+      )
+      .join("\n");
+
+    const messages = [
+      {
+        role: "system",
+        content: `
+You are an expert technical interviewer reviewing a candidate's complete interview performance.
+
+Based on the question and answer data, generate an overall feedback summary for the candidate.
+Keep it strictly under 50 words.
+Be professional, constructive, and encouraging. Focus on general strengths and areas for improvement.
+Do not provide a score, just text feedback.
+`,
+      },
+      {
+        role: "user",
+        content: `Interview Data:\n${questionData}`,
+      },
+    ];
+
+    const aiResponse = await askAi({ messages });
+    return aiResponse.trim();
+  } catch (error) {
+    console.log("Failed to generate overall feedback", error);
+    return "Feedback generation failed due to an internal error.";
+  }
+};
+
+export const finishInterview = async (req, res) => {
+  try {
+    const { interviewId } = req.body;
+    const interview = await Interview.findById(interviewId);
+    if (!interview) {
+      return res.status(404).json({ message: "Interview not found" });
+    }
+
+    const totalQuestions = interview.questions.length;
+
+    let totalScore = 0;
+    let totalConfidence = 0;
+    let totalCommunication = 0;
+    let totalCorrectness = 0;
+
+    if (totalQuestions > 0) {
+      interview.questions.forEach((question) => {
+        totalScore += question.score || 0;
+        totalConfidence += question.confidence || 0;
+        totalCommunication += question.communication || 0;
+        totalCorrectness += question.correctness || 0;
+      });
+
+      interview.finalScore = totalScore / totalQuestions;
+      interview.totalConfidence = totalConfidence / totalQuestions;
+      interview.totalCommunication = totalCommunication / totalQuestions;
+      interview.totalCorrectness = totalCorrectness / totalQuestions;
+    } else {
+      interview.finalScore = 0;
+      interview.totalConfidence = 0;
+      interview.totalCommunication = 0;
+      interview.totalCorrectness = 0;
+    }
+
+    const overallFeedback = await generateOverallFeedback(interview);
+    interview.overallFeedback = overallFeedback;
+    interview.status = "completed";
+    await interview.save();
+    return res.json({ message: "Interview completed successfully", interview });
+  } catch (error) {
+    console.log(error);
+    return res
+      .status(500)
+      .json({ message: `Failed to finish interview ${error}` });
+  }
+};
