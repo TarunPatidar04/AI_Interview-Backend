@@ -10,6 +10,21 @@ export const analyzeResume = async (req, res) => {
       return res.status(400).json({ message: "Resume File is required" });
     }
 
+    const user = await User.findById(req.userId);
+    if (!user) {
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.credits < 10) {
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      return res.status(400).json({ message: "Insufficient credits" });
+    }
+
     const file = req.file.path;
     const Filebuffer = await fs.promises.readFile(file);
     const uint8Array = new Uint8Array(Filebuffer);
@@ -31,6 +46,10 @@ export const analyzeResume = async (req, res) => {
         content: `
 Extract structured data from resume.
 
+Crucially, evaluate the resume specifically on ATS (Applicant Tracking System) criteria and calculate an accurate ATS score (0-100).
+Instead of generic feedback, you must generate a highly detailed and actionable plan on how the candidate can achieve a 100% ATS score.
+List exactly what keywords are missing, what structural changes should be made to the resume (e.g., formatting, headings), and any other weak points.
+
 Return strictly JSON:
 
 {
@@ -39,7 +58,7 @@ Return strictly JSON:
   "projects": ["project1", "project2"],
   "skills": ["skill1", "skill2"],
   "atsScore": number,
-  "feedback": "string (bullet points or short paragraph on how to improve the resume)"
+  "feedback": "string (Detailed bullet points explaining exactly what changes are needed to reach 100% ATS score, including missing keywords and structural improvements)"
 }
 `,
       },
@@ -52,6 +71,9 @@ Return strictly JSON:
     const aiResponse = await askAi({ messages });
     const parsedResponse = JSON.parse(aiResponse);
 
+    user.credits -= 10;
+    await user.save();
+
     fs.unlinkSync(file);
     return res.status(200).json({
       message: "Resume analyzed successfully",
@@ -62,6 +84,7 @@ Return strictly JSON:
       atsScore: parsedResponse.atsScore,
       feedback: parsedResponse.feedback,
       fullText,
+      user,
     });
   } catch (error) {
     console.log(error);
